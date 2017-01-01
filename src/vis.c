@@ -106,10 +106,34 @@ dump_tree(masstree_t *tree)
 	puts("}");
 }
 
+#include <fcntl.h>
+#include <sys/mman.h>
+
+int proxy = -1;
+
+static void *proxy_alloc(size_t size) {
+  return mmap(0, size, PROT_READ | PROT_WRITE, MAP_SHARED, proxy, 0);
+}
+
+static void proxy_free(void *addr, size_t size) {
+  munmap(addr, size);
+}
+
+static const masstree_ops_t proxy_ops = {
+  .alloc = proxy_alloc,
+  .free  = proxy_free
+};
+
 int
 main(int argc, char **argv)
 {
-	masstree_t *tree = masstree_create(NULL);
+  proxy = open("/dev/kmemproxy", O_RDWR);
+  if (proxy < 0) {
+    perror("open");
+    exit(EXIT_FAILURE);
+  }
+
+	masstree_t *tree = masstree_create(&proxy_ops);
 	char *line = NULL;
 	size_t linecap = 0;
 	ssize_t len;
